@@ -59,6 +59,25 @@ jobs:
       - name: 创建必要目录
         run: |
           mkdir -p data logs reports
+
+      - name: 设置图片渲染 Node 环境
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: apps/dsa-web/package-lock.json
+
+      - name: 安装报告转图依赖
+        env:
+          MARKDOWN_TO_IMAGE_CHANNELS: ${{ vars.MARKDOWN_TO_IMAGE_CHANNELS || secrets.MARKDOWN_TO_IMAGE_CHANNELS }}
+        run: |
+          if [ -z "${MARKDOWN_TO_IMAGE_CHANNELS//[[:space:],]/}" ]; then
+            echo "未启用图片推送，跳过浏览器安装"
+            exit 0
+          fi
+          npm ci --prefix apps/dsa-web --ignore-scripts
+          apps/dsa-web/node_modules/.bin/playwright install --with-deps chromium
+          sudo apt-get install -y --no-install-recommends fonts-noto-cjk fonts-noto-color-emoji
       
       - name: 执行股票分析
         env:
@@ -314,6 +333,11 @@ jobs:
           # ==========================================
           # 通知渠道（可同时配置多个，全部推送）
           # ==========================================
+
+          # 显式启用后自动安装 Chromium，并复用现有图片通知路由。
+          MARKDOWN_TO_IMAGE_CHANNELS: ${{ vars.MARKDOWN_TO_IMAGE_CHANNELS || secrets.MARKDOWN_TO_IMAGE_CHANNELS }}
+          MARKDOWN_TO_IMAGE_MAX_CHARS: ${{ vars.MARKDOWN_TO_IMAGE_MAX_CHARS || secrets.MARKDOWN_TO_IMAGE_MAX_CHARS || '15000' }}
+          MD2IMG_ENGINE: 'playwright'
           
           # 方式一：企业微信 Webhook
           WECHAT_WEBHOOK_URL: ${{ secrets.WECHAT_WEBHOOK_URL }}
