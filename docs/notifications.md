@@ -113,7 +113,26 @@ Discord 长报告发送复用现有分片链路：单条 `content` 运行时不�
 
 <!-- notification-actions-env-table:end -->
 
-默认 workflow 仍不映射 `MARKDOWN_TO_IMAGE_CHANNELS` 与 `MERGE_EMAIL_NOTIFICATION`。它们是发送形态或聚合行为开关，不是渠道凭证；在 Actions 中自动开始读取同名 Secret/Variable 会引入额外行为变化。
+默认 workflow 已映射 `MARKDOWN_TO_IMAGE_CHANNELS` 和 `MARKDOWN_TO_IMAGE_MAX_CHARS`，但渠道列表留空时仍按原有文本方式发送。`MERGE_EMAIL_NOTIFICATION` 仍未映射。
+
+## 每日报告以图片发送到邮箱和 Webhook（GitHub Actions）
+
+在 `Settings → Secrets and variables → Actions` 配置以下项目。分析所需的模型、股票列表等配置仍沿用原有设置。
+
+| 名称 | 位置 | 内容 |
+| --- | --- | --- |
+| `EMAIL_SENDER` | Variable 或 Secret | 发件邮箱 |
+| `EMAIL_PASSWORD` | Secret | 邮箱的 SMTP 授权码 / 应用专用密码 |
+| `EMAIL_RECEIVERS` | Variable 或 Secret | 收件邮箱，多个地址用英文逗号分隔；留空发给自己 |
+| `WECHAT_WEBHOOK_URL` | Secret | 企业微信机器人 Webhook 地址 |
+| `MARKDOWN_TO_IMAGE_CHANNELS` | Variable 或 Secret | `email,wechat`，同时向邮箱和企业微信发送图片 |
+| `MARKDOWN_TO_IMAGE_MAX_CHARS` | Variable 或 Secret，可选 | 默认 `15000`；超过此长度回退文本，可按报告长度调整 |
+
+workflow 在启用图片渠道后自动安装锁定依赖中的 Playwright、Chromium 和中日韩 / emoji 字体，并固定使用 `MD2IMG_ENGINE=playwright`。本地 / Docker 仍按 `.env` 中的 `MD2IMG_ENGINE` 选择引擎。邮件通过 MIME 内嵌 PNG，不依赖公网图片链接；常见邮箱的 SMTP 服务会根据发件邮箱域名自动识别。
+
+Webhook 的图片能力取决于平台：企业微信使用 `WECHAT_WEBHOOK_URL` 和 `wechat`；Discord 可使用 `CUSTOM_WEBHOOK_URLS` 和 `custom`。通用自建 Webhook、飞书或钉钉的地址不能直接代替企业微信地址；当前自定义 Webhook 图片发送仅支持 Discord，其他自定义地址会回退文本。自建接收服务如需收图，需要先约定图片上传协议。只发邮件时，将图片渠道设为 `email`。
+
+配置完成后，在 `Actions → 每日股票分析 → Run workflow` 手动验证。默认北京时间每个工作日 18:00 触发，非交易日跳过；若需周末及节假日也执行，把 cron 改成 `0 10 * * *`，并设置 `TRADING_DAY_CHECK_ENABLED=false`。GitHub 定时触发可能延迟。转图失败或超过长度上限会回退文本，企业微信图片超过约 2 MB 时也会回退文本。
 
 ## 图片报告分享模板
 
@@ -124,7 +143,7 @@ Discord 长报告发送复用现有分片链路：单条 `content` 运行时不�
 - 结构化字段、缺失值行为、个股/大盘映射和本地预览示例见 [分享图片模板与数据填充](share-images.md)。
 - `wkhtmltoimage`、`markdown-to-file` 与 `playwright` 使用同一份海报 HTML；现有 `MD2IMG_ENGINE`、`MARKDOWN_TO_IMAGE_MAX_CHARS` 和转换失败后回退文本的行为不变。Playwright 模式需先安装 Web 依赖并执行 `npx playwright install chromium`。
 - 模板按正文长度生成长图，不会为适配固定画幅而截断报告。内容超过 `MARKDOWN_TO_IMAGE_MAX_CHARS` 时仍跳过转图。
-- GitHub Actions 默认仍不映射 `MARKDOWN_TO_IMAGE_CHANNELS`；如需在 fork 的工作流中启用，应显式补充环境变量映射并安装所选转图工具。
+- GitHub Actions 设置 `MARKDOWN_TO_IMAGE_CHANNELS` 即自动安装 Playwright 转图依赖，具体步骤见上文；留空时不安装浏览器。
 
 ## CLI 诊断
 
@@ -318,7 +337,7 @@ Docker 场景可通过 `--env-file .env` / Compose `env_file` 注入通知相关
 
 默认 `00-daily-analysis.yml` 只读取表格中显式映射的 Secret / Variable。新增 repository Secret 或 Variable 后，只有变量名已经出现在 workflow `env:` 中才会进入运行进程；`STOCK_GROUP_N` / `EMAIL_GROUP_N` 这类任意编号变量不会自动导入。
 
-Secret 适合 token、password、webhook URL 等敏感项；Variable 适合 `WECHAT_MSG_TYPE`、`EMAIL_SENDER_NAME`、路由、降噪窗口和时区这类非敏感行为配置。`MARKDOWN_TO_IMAGE_CHANNELS` 与 `MERGE_EMAIL_NOTIFICATION` 默认不映射，如需在自己的 fork 中使用，应显式修改 workflow 并补充对应测试。
+Secret 适合 token、password、webhook URL 等敏感项；Variable 适合 `WECHAT_MSG_TYPE`、`EMAIL_SENDER_NAME`、路由、降噪窗口、图片渠道列表和时区这类非敏感行为配置。`MARKDOWN_TO_IMAGE_CHANNELS` 已映射，配置后启用图片推送；`MERGE_EMAIL_NOTIFICATION` 仍未映射，如需使用应显式修改 workflow 并补充对应测试。
 
 ## Desktop
 
